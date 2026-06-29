@@ -165,3 +165,114 @@ All endpoints return the same JSON structure:
 ```
 
 Fields not found in the bill are returned as `null`.
+
+---
+
+## Deployment
+
+### Render (recommended — free tier available)
+
+1. Push code to GitHub
+2. Go to [render.com](https://render.com) → **New Web Service** → connect your repo
+3. Configure:
+   - **Environment:** Python 3
+   - **Build command:** `pip install -r requirements.txt`
+   - **Start command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. Add environment variable: `GROQ_API_KEY=your_key`
+5. Click **Deploy**
+
+> For image OCR support, add a build command that installs Tesseract:
+> ```
+> apt-get install -y tesseract-ocr && pip install -r requirements.txt
+> ```
+> Use a `render.yaml` file (see below) to run shell commands before build.
+
+**render.yaml** (optional, for infrastructure-as-code):
+
+```yaml
+services:
+  - type: web
+    name: bill-extraction-service
+    env: python
+    buildCommand: apt-get install -y tesseract-ocr && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+```
+
+---
+
+### Railway (free tier available)
+
+1. Install Railway CLI: `npm install -g @railway/cli`
+2. Login: `railway login`
+3. Initialize project:
+   ```bash
+   railway init
+   railway link
+   ```
+4. Set environment variable:
+   ```bash
+   railway variables set GROQ_API_KEY=your_key
+   ```
+5. Add a `Procfile` in the project root:
+   ```
+   web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+   ```
+6. Deploy:
+   ```bash
+   railway up
+   ```
+
+---
+
+### Fly.io (free tier available)
+
+1. Install Fly CLI: [fly.io/docs/getting-started/installing-flyctl](https://fly.io/docs/getting-started/installing-flyctl/)
+2. Login: `fly auth login`
+3. Add a `Dockerfile` in the project root:
+   ```dockerfile
+   FROM python:3.11-slim
+   RUN apt-get update && apt-get install -y tesseract-ocr && rm -rf /var/lib/apt/lists/*
+   WORKDIR /app
+   COPY requirements.txt .
+   RUN pip install -r requirements.txt
+   COPY . .
+   CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+   ```
+4. Launch:
+   ```bash
+   fly launch
+   ```
+5. Set secret:
+   ```bash
+   fly secrets set GROQ_API_KEY=your_key
+   ```
+6. Deploy:
+   ```bash
+   fly deploy
+   ```
+
+---
+
+### Docker (self-hosted)
+
+Add a `Dockerfile` in the project root:
+
+```dockerfile
+FROM python:3.11-slim
+RUN apt-get update && apt-get install -y tesseract-ocr && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+Build and run:
+
+```bash
+docker build -t bill-extraction-service .
+docker run -p 8000:8000 -e GROQ_API_KEY=your_key bill-extraction-service
+```
